@@ -8,11 +8,12 @@ def main():
     while True:
         print("\nNOTEBOOK APPLICATION")
         print("1. Add a note")
-        print("2. Get notes by topic")
-        print("3. Exit")
+        print("2. Lookup data on Wikipedia")
+        print("0. Exit")
         
         choice = input("Enter your choice (1-3): ")
         
+        # Add a note
         if choice == '1':
             # Get note details from user
             topic = input("Enter topic: ")
@@ -26,25 +27,22 @@ def main():
                 print("Note added successfully!")
             else:
                 print("Failed to add note.")
-                
+
+        # Wikipedia search
         elif choice == '2':
-            # Get topic from user
-            topic = input("Enter topic to retrieve: ")
+            # Get search term from user
+            search_term = input("Enter search term for Wikipedia: ")
             
             # Call the RPC method
-            notes = server.get_notes_by_topic(topic)
+            result = server.lookup_wikipedia(search_term)
             
-            if notes:
-                print(f"\n--- Notes for '{topic}' ---")
-                for i, note in enumerate(notes, 1):
-                    print(f"Note {i}:")
-                    print(f"  Text: {note['text']}")
-                    print(f"  Timestamp: {note['timestamp']}")
-                    print()
+            if result:
+                print("Added Wikipedia information to XML successfully.")
             else:
-                print(f"No notes found for topic '{topic}'")
-                
-        elif choice == '3':
+                print("Failed to add Wikipedia information to XML.")
+
+        # Exit the application        
+        elif choice == '0':
             print("Exiting...")
             break
             

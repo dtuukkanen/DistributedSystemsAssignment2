@@ -4,12 +4,14 @@ from xml.dom import minidom
 import os
 from datetime import datetime
 import threading
+import requests
 
 # File path for the XML database
 XML_FILE = "notes_database.xml"
 
 # Lock for thread safety when accessing the XML file
 file_lock = threading.Lock()
+
 
 def initialize_xml_if_needed():
     """Initialize the XML file if it does not exist."""
@@ -20,6 +22,7 @@ def initialize_xml_if_needed():
             with open(XML_FILE, "wb") as file:
                 tree.write(file)
                 
+
 def add_note(topic, text, timestamp=None):
     """
     Add a note to the XML database
@@ -81,15 +84,45 @@ def add_note(topic, text, timestamp=None):
         print(f"Error adding note: {e}")
         return False
 
-def get_notes_by_topic(topic):
+
+def communicate_with_wikipedia(search_term):
+    # Create a session
+    S = requests.Session()
+
+    # Set url
+    URL = "https://en.wikipedia.org/w/api.php"
+
+    # Set parameters
+    PARAMS = {
+        "action": "opensearch",
+        "namespace": 0,
+        "search": search_term,
+        "limit": 1,
+        "format": "json"
+    }
+
+    # Send GET request and save the response as R
+    R = S.get(url=URL, params=PARAMS)
+
+    # Convert response to JSON
+    DATA = R.json()
+
+    results = {
+        "title": DATA[1][0],
+        "description": DATA[2][0], # This is empty string because the API is restricted by Wikipedia
+        "url": DATA[3][0]
+    }
+
+    print(results)
+    return results
+
+
+def add_wikipedia_search_results_to_xml(search_term, results):
     """
-    Retrieve notes by topic from the XML database
-    
+    Add Wikipedia URL to an existing topic in the XML database
     Args:
-        topic: The topic to search for
-    
-    Returns:
-        A list of dictionaries containing note text and timestamps
+        search_term: The term used for the Wikipedia search (should match a topic name)
+        results: The results from the Wikipedia search
     """
     try:
         initialize_xml_if_needed()
@@ -98,24 +131,62 @@ def get_notes_by_topic(topic):
             tree = ET.parse(XML_FILE)
             root = tree.getroot()
             
-            # Find the requested topic
+            # Find the matching topic
+            topic_found = False
             for topic_element in root.findall('topic'):
-                if topic_element.get('name') == topic:
-                    notes = []
+                if topic_element.get('name') == search_term:
+                    # Check if this topic already has a Wikipedia URL
+                    existing_wiki = topic_element.find('wikipedia_url')
+                    if existing_wiki is not None:
+                        print(f"Wikipedia URL already exists for topic '{search_term}'")
+                        return False
                     
-                    # Collect all notes for this topic
-                    for note_element in topic_element.findall('note'):
-                        text = note_element.find('text').text
-                        timestamp = note_element.find('timestamp').text
-                        notes.append({'text': text, 'timestamp': timestamp})
+                    # Add Wikipedia information to the existing topic
+                    wikipedia_element = ET.SubElement(topic_element, 'wikipedia_url')
+                    wikipedia_element.text = results['url']
                     
-                    return notes
+                    # Optionally add title and description as attributes
+                    wikipedia_element.set('title', results['title'])
+                    
+                    topic_found = True
+                    break
             
-            # Topic not found
-            return []
+            if not topic_found:
+                print(f"Topic '{search_term}' not found, Wikipedia info not added")
+                return False
+            
+            # Generate XML with pretty formatting but remove empty lines
+            rough_string = ET.tostring(root, encoding='utf-8')
+            reparsed = minidom.parseString(rough_string)
+            xmlstr = reparsed.toprettyxml(indent="  ")
+            
+            # Filter out lines that are just whitespace
+            cleaned_xmlstr = '\n'.join([line for line in xmlstr.splitlines() if line.strip()])
+            
+            # Save the cleaned XML to file
+            with open(XML_FILE, "w") as f:
+                f.write(cleaned_xmlstr)
+            
+            return True
+                
     except Exception as e:
-        print(f"Error retrieving notes: {e}")
-        return []
+        print(f"Error adding Wikipedia search results: {e}")
+        return False
+
+
+def lookup_wikipedia(search_term):
+    """
+    Lookup data on Wikipedia and add it to the corresponding topic
+    
+    Args:
+        search_term: The term to search for on Wikipedia (should match a topic name)
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    results = communicate_with_wikipedia(search_term)
+    return add_wikipedia_search_results_to_xml(search_term, results)
+
 
 def main():
     # Create a simple XML-RPC server
@@ -124,7 +195,7 @@ def main():
 
     # Register functions
     server.register_function(add_note, "add_note")
-    server.register_function(get_notes_by_topic, "get_notes_by_topic")
+    server.register_function(lookup_wikipedia, "lookup_wikipedia")
 
     # Start the server
     try: 
