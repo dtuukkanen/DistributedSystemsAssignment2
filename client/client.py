@@ -11,7 +11,7 @@ def main():
         print("2. Lookup data on Wikipedia")
         print("0. Exit")
         
-        choice = input("Enter your choice (1-3): ")
+        choice = input("Enter your choice (0-2): ")
         
         # Add a note
         if choice == '1':
